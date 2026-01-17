@@ -2,9 +2,10 @@ import React, { useState, useCallback } from 'react';
 import { DesignReview } from './components/DesignReview';
 import { DeckViewer } from './components/DeckViewer';
 import { generatePresentationContent } from './services/geminiService';
-import { AppState, DesignSystem, PresentationData } from './types';
+import { AppState, DesignSystem, PresentationData, UI_TEXT_EN, UIText } from './types';
 import { AlertCircle } from 'lucide-react';
 
+// Default design system - customize these values for your brand
 const defaultDesignSystem: DesignSystem = {
   name: "Standard Theme",
   colors: {
@@ -12,7 +13,7 @@ const defaultDesignSystem: DesignSystem = {
     text: "#FFFFFF",
     primary: "#FFFFFF",
     secondary: "#A1A1AA",
-    accent: "#e4022b", 
+    accent: "#e4022b", // Change this to your brand color
   },
   fonts: {
     heading: "Inter, sans-serif",
@@ -21,7 +22,8 @@ const defaultDesignSystem: DesignSystem = {
   logo: {
     placement: "top-right",
     style: "light",
-    images: {}
+    images: {},
+    maxHeight: 60 // Logo max height in pixels
   },
   masters: {
     title: { background: "#000000", textColor: "#FFFFFF", accentColor: "#e4022b" },
@@ -29,7 +31,19 @@ const defaultDesignSystem: DesignSystem = {
     default: { background: "#f8f7f6", textColor: "#363131", accentColor: "#e4022b" },
   },
   vibe: "Professional and modern",
+  settings: {
+    showPageNumbers: true,
+    dateFormat: 'en-GB',
+    endSlide: {
+      title: "Thank You!",
+      subtitle: "" // Leave empty or add your company name
+    },
+    language: 'en'
+  }
 };
+
+// UI Text - can be switched based on language
+const UI_TEXT: UIText = UI_TEXT_EN;
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>('review');
@@ -47,14 +61,16 @@ const App: React.FC = () => {
         setPresentation({ topic, slides });
         setState('presentation');
       } else {
-        throw new Error("Keine Slides generiert.");
+        throw new Error(UI_TEXT.errors.noSlides);
       }
     } catch (e) {
       console.error(e);
-      setError("Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.");
+      setError(UI_TEXT.errors.generationFailed);
       setState('review');
     }
   }, []);
+
+  const accentColor = designSystem.colors.accent;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col relative overflow-hidden">
@@ -62,15 +78,21 @@ const App: React.FC = () => {
       <header className="px-8 py-6 flex items-center justify-between border-b border-white/5 bg-black/50 backdrop-blur-md z-20">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Presentation <span className="text-[#e4022b]">Engine</span></h1>
+            <h1 className="text-xl font-bold tracking-tight">
+              Presentation <span style={{ color: accentColor }}>Engine</span>
+            </h1>
             <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-widest">Intelligence Engine</p>
           </div>
         </div>
         
         <div className="flex items-center gap-6 text-xs font-medium text-zinc-500 uppercase tracking-widest">
-          <span className={state === 'review' || state === 'generating' ? 'text-[#e4022b]' : ''}>1. Configure</span>
+          <span style={{ color: state === 'review' || state === 'generating' ? accentColor : undefined }}>
+            1. {UI_TEXT.labels.configure}
+          </span>
           <div className="w-4 h-[1px] bg-zinc-800" />
-          <span className={state === 'presentation' ? 'text-[#e4022b]' : ''}>2. Result</span>
+          <span style={{ color: state === 'presentation' ? accentColor : undefined }}>
+            2. {UI_TEXT.labels.result}
+          </span>
         </div>
       </header>
 
@@ -104,7 +126,10 @@ const App: React.FC = () => {
 
       {/* Background Ambience */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#e4022b]/10 blur-[120px] rounded-full mix-blend-screen" />
+        <div 
+          className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] blur-[120px] rounded-full mix-blend-screen" 
+          style={{ backgroundColor: `${accentColor}10` }}
+        />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-900/10 blur-[120px] rounded-full mix-blend-screen" />
       </div>
     </div>
