@@ -66,7 +66,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isLoading 
   return (
     <div 
       className={`relative w-full max-w-2xl mx-auto h-96 border-2 border-dashed rounded-3xl transition-all duration-300 flex flex-col items-center justify-center p-8
-        ${dragActive ? 'border-indigo-500 bg-indigo-50/5' : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-500'}
+        ${dragActive ? 'border-[#e4022b] bg-[#e4022b]/5' : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-500'}
         ${isLoading ? 'opacity-50 pointer-events-none' : ''}
       `}
       onDragEnter={handleDrag}
@@ -86,12 +86,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isLoading 
       <div className="flex flex-col items-center gap-6 text-center">
         {isLoading ? (
           <div className="relative">
-             <div className="absolute inset-0 bg-indigo-500 blur-xl opacity-20 animate-pulse rounded-full"></div>
-             <Loader2 className="w-16 h-16 text-indigo-400 animate-spin relative z-10" />
+             <div className="absolute inset-0 bg-[#e4022b] blur-xl opacity-20 animate-pulse rounded-full"></div>
+             <Loader2 className="w-16 h-16 text-[#e4022b] animate-spin relative z-10" />
           </div>
         ) : (
           <div className="w-20 h-20 rounded-full bg-zinc-800 flex items-center justify-center shadow-2xl ring-1 ring-white/10 group-hover:scale-110 transition-transform duration-300">
-            {dragActive ? <FileType className="w-8 h-8 text-indigo-400" /> : <Upload className="w-8 h-8 text-indigo-400" />}
+            {dragActive ? <FileType className="w-8 h-8 text-[#e4022b]" /> : <Upload className="w-8 h-8 text-[#e4022b]" />}
           </div>
         )}
         

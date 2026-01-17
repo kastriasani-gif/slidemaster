@@ -129,7 +129,7 @@ export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose 
               onClick={() => setCurrentIndex(idx)}
               className={`
                 w-16 h-10 rounded border-2 transition-all flex-shrink-0
-                ${currentIndex === idx ? 'border-indigo-500 scale-110 z-10' : 'border-transparent opacity-50 hover:opacity-100'}
+                ${currentIndex === idx ? 'border-[#e4022b] scale-110 z-10' : 'border-transparent opacity-50 hover:opacity-100'}
               `}
               style={{ backgroundColor: system.colors.background }}
             />

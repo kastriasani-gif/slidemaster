@@ -1,22 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { DesignReview } from './components/DesignReview';
 import { DeckViewer } from './components/DeckViewer';
 import { generatePresentationContent } from './services/geminiService';
 import { AppState, DesignSystem, PresentationData } from './types';
-import { MonitorPlay } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 const defaultDesignSystem: DesignSystem = {
-  name: "Custom Presentation Theme",
+  name: "Standard Theme",
   colors: {
     background: "#000000",
     text: "#FFFFFF",
     primary: "#FFFFFF",
     secondary: "#A1A1AA",
-    accent: "#E30613", 
+    accent: "#e4022b", 
   },
   fonts: {
-    heading: "Arial, sans-serif",
-    body: "Arial, sans-serif",
+    heading: "Inter, sans-serif",
+    body: "Inter, sans-serif",
   },
   logo: {
     placement: "top-right",
@@ -24,94 +24,89 @@ const defaultDesignSystem: DesignSystem = {
     images: {}
   },
   masters: {
-    title: {
-      background: "#000000",
-      textColor: "#FFFFFF",
-      accentColor: "#E30613",
-    },
-    section: {
-      background: "#000000",
-      textColor: "#FFFFFF",
-      accentColor: "#E30613",
-    },
-    default: {
-      background: "#000000",
-      textColor: "#FFFFFF",
-      accentColor: "#E30613",
-    },
+    title: { background: "#000000", textColor: "#FFFFFF", accentColor: "#e4022b" },
+    section: { background: "#000000", textColor: "#FFFFFF", accentColor: "#e4022b" },
+    default: { background: "#f8f7f6", textColor: "#363131", accentColor: "#e4022b" },
   },
-  vibe: "Professional, clear, and impactful.",
+  vibe: "Professional and modern",
 };
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>('review');
-  const [designSystem, setDesignSystem] = useState<DesignSystem | null>(defaultDesignSystem);
+  const [designSystem, setDesignSystem] = useState<DesignSystem>(defaultDesignSystem);
   const [presentation, setPresentation] = useState<PresentationData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = async (topic: string, updatedSystem: DesignSystem) => {
-    // Update the system in state with any changes (like the uploaded logo)
+  const handleGenerate = useCallback(async (topic: string, updatedSystem: DesignSystem) => {
     setDesignSystem(updatedSystem);
-    
+    setState('generating');
+    setError(null);
     try {
-      setIsLoading(true);
       const slides = await generatePresentationContent(topic, updatedSystem);
-      setPresentation({ topic, slides });
-      setState('presentation');
+      if (slides && slides.length > 0) {
+        setPresentation({ topic, slides });
+        setState('presentation');
+      } else {
+        throw new Error("Keine Slides generiert.");
+      }
     } catch (e) {
       console.error(e);
-      alert('Failed to generate content. Please try again.');
-    } finally {
-      setIsLoading(false);
+      setError("Generierung fehlgeschlagen. Bitte versuchen Sie es erneut.");
+      setState('review');
     }
-  };
+  }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-indigo-500/30">
-      {/* Background Ambience */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-900/20 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-900/20 blur-[120px] rounded-full" />
-      </div>
-
-      {state !== 'presentation' && (
-        <header className="relative z-10 px-8 py-6 flex items-center justify-between border-b border-white/5">
-          <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-               <MonitorPlay className="w-6 h-6 text-white" />
-             </div>
-             <div>
-               <h1 className="text-xl font-bold tracking-tight">Presentation<span className="text-indigo-400">Intelligence</span></h1>
-               <p className="text-xs text-zinc-500 font-medium tracking-wide uppercase">Engine v1.0</p>
-             </div>
+    <div className="min-h-screen bg-zinc-950 text-white flex flex-col relative overflow-hidden">
+      {/* Header */}
+      <header className="px-8 py-6 flex items-center justify-between border-b border-white/5 bg-black/50 backdrop-blur-md z-20">
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">Presentation <span className="text-[#e4022b]">Engine</span></h1>
+            <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-widest">Intelligence Engine</p>
           </div>
-          
-          <div className="flex items-center gap-4 text-sm font-medium text-zinc-500">
-             <span className={state === 'review' ? 'text-indigo-400' : ''}>1. Configuration</span>
-             <div className="w-4 h-[1px] bg-zinc-800" />
-             <span className={state === 'presentation' ? 'text-indigo-400' : ''}>2. Result</span>
-          </div>
-        </header>
-      )}
-
-      <main className="relative z-10 container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[80vh]">
+        </div>
         
-        {state === 'review' && designSystem && (
-          <DesignReview 
-            system={designSystem} 
-            onConfirm={handleGenerate}
-            isLoading={isLoading}
-          />
+        <div className="flex items-center gap-6 text-xs font-medium text-zinc-500 uppercase tracking-widest">
+          <span className={state === 'review' || state === 'generating' ? 'text-[#e4022b]' : ''}>1. Configure</span>
+          <div className="w-4 h-[1px] bg-zinc-800" />
+          <span className={state === 'presentation' ? 'text-[#e4022b]' : ''}>2. Result</span>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 relative z-10 container mx-auto px-4 py-12 flex flex-col items-center justify-center">
+        {error && (
+          <div className="w-full max-w-2xl mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-400 animate-in fade-in slide-in-from-top-4">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <p className="text-sm font-medium">{error}</p>
+          </div>
         )}
 
-        {state === 'presentation' && presentation && designSystem && (
-          <DeckViewer 
-            slides={presentation.slides} 
-            system={designSystem}
-            onClose={() => setState('review')}
-          />
-        )}
+        <div className="w-full flex justify-center">
+          {(state === 'review' || state === 'generating') && (
+            <DesignReview 
+              system={designSystem} 
+              onConfirm={handleGenerate}
+              isLoading={state === 'generating'}
+            />
+          )}
+
+          {state === 'presentation' && presentation && (
+            <DeckViewer 
+              slides={presentation.slides} 
+              system={designSystem}
+              onClose={() => setState('review')}
+            />
+          )}
+        </div>
       </main>
+
+      {/* Background Ambience */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#e4022b]/10 blur-[120px] rounded-full mix-blend-screen" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-900/10 blur-[120px] rounded-full mix-blend-screen" />
+      </div>
     </div>
   );
 };
