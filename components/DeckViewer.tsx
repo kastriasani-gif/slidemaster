@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Slide, DesignSystem } from '../types';
 import { SlideRenderer } from './SlideRenderer';
-import { ChevronLeft, ChevronRight, X, Download, Maximize2, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Download, Maximize2, Loader2, FileType, Presentation } from 'lucide-react';
 // @ts-ignore
 import html2canvas from 'html2canvas';
 // @ts-ignore
 import { jsPDF } from 'jspdf';
+// @ts-ignore
+import PptxGenJS from 'pptxgenjs';
 
 interface DeckViewerProps {
   slides: Slide[];
@@ -16,8 +18,11 @@ interface DeckViewerProps {
 export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [isExportingPPTX, setIsExportingPPTX] = useState(false);
   const exportContainerRef = useRef<HTMLDivElement>(null);
+
+  const isExporting = isExportingPDF || isExportingPPTX;
 
   // Keyboard navigation
   useEffect(() => {
@@ -54,7 +59,7 @@ export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose 
 
   const handleExportPDF = async () => {
     if (isExporting) return;
-    setIsExporting(true);
+    setIsExportingPDF(true);
 
     // Allow time for the hidden container to render and images to load
     setTimeout(async () => {
@@ -78,7 +83,6 @@ export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose 
             allowTaint: true,
             logging: false,
             backgroundColor: system.colors.background,
-            // Optimization: Clone document to avoid messing with live DOM, but here we use a dedicated offscreen container
           });
 
           const imgData = canvas.toDataURL('image/jpeg', 0.9);
@@ -96,17 +100,189 @@ export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose 
         console.error("PDF Export failed:", error);
         alert("Could not export PDF. Please check console for errors.");
       } finally {
-        setIsExporting(false);
+        setIsExportingPDF(false);
       }
-    }, 2500); // Increased timeout slightly to ensure assets load
+    }, 2500); 
+  };
+
+  const handleExportPPTX = async () => {
+    if (isExporting) return;
+    setIsExportingPPTX(true);
+
+    try {
+      const pptx = new PptxGenJS();
+      pptx.layout = 'LAYOUT_16x9'; // 10 x 5.625 inches
+      pptx.title = system.name;
+
+      // Helper to get hex color without #
+      const getHex = (color: string) => color.replace('#', '');
+
+      slides.forEach((slide, index) => {
+        const isTitle = slide.type === 'title';
+        const isSection = slide.type === 'section';
+        const isEnd = index === slides.length - 1 && slides.length > 1;
+        
+        // Determine Master Style
+        let master = system.masters.default;
+        if (isTitle || isEnd) master = system.masters.title;
+        else if (isSection) master = system.masters.section;
+
+        const slideBg = master.background;
+        const textColor = master.textColor || '#000000';
+        const accentColor = system.colors.accent || '#FF0000';
+
+        const pptxSlide = pptx.addSlide();
+        
+        // Background
+        if (slideBg.startsWith('#')) {
+          pptxSlide.background = { color: getHex(slideBg) };
+        } else if (master.backgroundImage) {
+           // We'll treat gradients or images as solid black for safety if not simple hex, 
+           // unless it's a data URL image.
+           if (master.backgroundImage.startsWith('data:')) {
+              pptxSlide.background = { data: master.backgroundImage };
+           } else {
+              pptxSlide.background = { color: '000000' };
+           }
+        } else {
+            pptxSlide.background = { color: 'FFFFFF' };
+        }
+
+        // Add Logo (if configured)
+        if (system.logo.placement !== 'none') {
+             const useLightLogo = textColor.toUpperCase() === '#FFFFFF';
+             const logoData = useLightLogo ? system.logo.images?.light : system.logo.images?.dark;
+             const fallback = useLightLogo ? system.logo.images?.dark : system.logo.images?.light;
+             
+             const finalLogo = logoData || fallback;
+             
+             if (finalLogo) {
+                 let x = 9, y = 0.5; // Default top right
+                 if (system.logo.placement === 'top-left') { x = 0.5; }
+                 if (system.logo.placement === 'bottom-right') { y = 5; }
+                 if (system.logo.placement === 'bottom-left') { x = 0.5; y = 5; }
+                 
+                 pptxSlide.addImage({
+                     data: finalLogo,
+                     x: x,
+                     y: y,
+                     w: 1.5,
+                     h: 0.5,
+                     sizing: { type: 'contain', w: 1.5, h: 0.5 }
+                 });
+             }
+        }
+
+        // Content
+        if (isTitle) {
+            pptxSlide.addText(slide.title, {
+                x: 0.5, y: 2, w: '90%', h: 1.5,
+                fontSize: 44, color: getHex(textColor), bold: true, fontFace: 'Arial'
+            });
+            if (slide.subtitle) {
+                pptxSlide.addText(slide.subtitle, {
+                    x: 0.5, y: 3.5, w: '90%', h: 1,
+                    fontSize: 24, color: getHex(textColor), opacity: 0.8, fontFace: 'Arial'
+                });
+            }
+        } else if (isSection) {
+            pptxSlide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 2.3, w: 1, h: 0.1, fill: { color: getHex(accentColor) } });
+            pptxSlide.addText(slide.title, {
+                x: 0.5, y: 2.5, w: '90%', h: 1.5,
+                fontSize: 36, color: getHex(textColor), bold: true, fontFace: 'Arial'
+            });
+        } else if (isEnd) {
+             pptxSlide.addText("Vielen Dank!", {
+                x: 0, y: 2, w: '100%', h: 1.5,
+                align: 'center',
+                fontSize: 54, color: getHex(textColor), bold: true, fontFace: 'Arial'
+            });
+        } else if (slide.type === 'bigNumber') {
+            pptxSlide.addText(slide.title, {
+                x: 0.5, y: 1, w: 4, h: 1,
+                fontSize: 28, color: getHex(textColor), bold: true
+            });
+             pptxSlide.addText(slide.highlight || "100%", {
+                x: 5, y: 1.5, w: 4.5, h: 3,
+                fontSize: 90, color: getHex(accentColor), bold: true, align: 'right'
+            });
+            if (slide.content && slide.content.length > 0) {
+                 pptxSlide.addText(slide.content.join('\n'), {
+                    x: 0.5, y: 2.5, w: 4, h: 3,
+                    fontSize: 18, color: getHex(textColor), opacity: 0.8
+                });
+            }
+        } else if (slide.type === 'quote') {
+             pptxSlide.addText(`“`, {
+                x: 0.5, y: 0.5, w: 2, h: 2,
+                fontSize: 120, color: getHex(accentColor), opacity: 0.2
+            });
+            pptxSlide.addText(slide.highlight || slide.title, {
+                x: 1.5, y: 1.5, w: 7, h: 2,
+                fontSize: 32, color: getHex(textColor), bold: true, align: 'center', italic: true
+            });
+            if (slide.subtitle) {
+                 pptxSlide.addText(`— ${slide.subtitle}`, {
+                    x: 2, y: 3.5, w: 6, h: 0.5,
+                    fontSize: 18, color: getHex(textColor), align: 'center'
+                });
+            }
+        } else {
+            // Standard Content
+            pptxSlide.addText(slide.title, {
+                x: 0.5, y: 0.5, w: '90%', h: 0.8,
+                fontSize: 32, color: getHex(textColor), bold: true, fontFace: 'Arial'
+            });
+
+            // Content Left
+            if (slide.content && slide.content.length > 0) {
+                 const bulletItems = slide.content.map(c => ({ text: c, options: { fontSize: 16, color: getHex(textColor), breakLine: true } }));
+                 pptxSlide.addText(bulletItems, {
+                    x: 0.5, y: 1.5, w: 5, h: 3.5,
+                    bullet: { type: 'bullet', color: getHex(accentColor) },
+                    fontFace: 'Arial'
+                });
+            }
+
+            // Image Right
+            if (slide.imageKeyword) {
+                 // pptxgenjs fetches this
+                 const imageUrl = `https://picsum.photos/seed/${slide.id}/800/600`; 
+                 pptxSlide.addImage({
+                     path: imageUrl,
+                     x: 6,
+                     y: 1.5,
+                     w: 3.5,
+                     h: 3.5
+                 });
+            }
+        }
+
+        // Add page number
+        if (!isTitle && !isEnd) {
+             pptxSlide.addText(`${index + 1} / ${slides.length}`, {
+                 x: 9, y: 5.2, w: 1, h: 0.3,
+                 fontSize: 10, color: getHex(textColor), opacity: 0.5, align: 'right'
+             });
+        }
+
+      });
+
+      await pptx.writeFile({ fileName: `${system.name.replace(/\s+/g, '_')}_presentation.pptx` });
+
+    } catch (e) {
+      console.error("PPTX Generation Error", e);
+      alert("Failed to generate PowerPoint file.");
+    } finally {
+      setIsExportingPPTX(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[100] bg-[#f4f4f5] flex flex-col animate-in fade-in duration-300">
       
       {/* Hidden Container for PDF Export */}
-      {/* We use fixed positioning off-screen to ensure it renders correctly (display:none or size 0 often fails with html2canvas) */}
-      {isExporting && (
+      {isExportingPDF && (
         <div 
           className="fixed z-[-1] pointer-events-none" 
           style={{ 
@@ -114,7 +290,7 @@ export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose 
             left: '-10000px', 
             width: '1920px', 
             height: '1080px',
-            overflow: 'hidden' // Keep it contained
+            overflow: 'hidden' 
           }}
         >
            <div ref={exportContainerRef}>
@@ -135,18 +311,20 @@ export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose 
         </div>
       )}
 
-      {/* Loading Overlay during Export */}
+      {/* Loading Overlay */}
       {isExporting && (
-        <div className="absolute inset-0 z-[60] bg-black/80 flex flex-col items-center justify-center text-white backdrop-blur-sm">
+        <div className="absolute inset-0 z-[120] bg-black/80 flex flex-col items-center justify-center text-white backdrop-blur-sm">
           <Loader2 className="w-12 h-12 animate-spin text-[#e4022b] mb-4" />
-          <h2 className="text-xl font-bold">Generating PDF...</h2>
-          <p className="text-zinc-400">Capturing {slides.length} slides. This may take a moment.</p>
+          <h2 className="text-xl font-bold">{isExportingPDF ? "Generating PDF..." : "Building PowerPoint..."}</h2>
+          <p className="text-zinc-400">
+            {isExportingPDF ? "Capturing pixel-perfect slides." : "Creating editable native slides."}
+          </p>
         </div>
       )}
 
       {/* Toolbar */}
       <div className={`
-        flex items-center justify-between p-4 bg-zinc-900/50 backdrop-blur text-white absolute top-0 left-0 right-0 z-50 transition-transform duration-300
+        flex items-center justify-between p-4 bg-zinc-900 text-white absolute top-0 left-0 right-0 z-[110] transition-transform duration-300 shadow-xl
         ${isFullscreen ? '-translate-y-full hover:translate-y-0' : 'translate-y-0'}
       `}>
         <div className="flex items-center gap-4">
@@ -162,7 +340,7 @@ export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose 
           {system.name}
         </h1>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
           <button 
             onClick={toggleFullscreen}
             className="p-2 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white"
@@ -170,14 +348,31 @@ export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose 
           >
             <Maximize2 className="w-5 h-5" />
           </button>
-          <button 
-            onClick={handleExportPDF}
-            disabled={isExporting}
-            className="bg-white text-black px-4 py-2 rounded-lg text-sm font-semibold hover:bg-zinc-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-          >
-            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            Download PDF
-          </button>
+          
+          <div className="h-6 w-px bg-zinc-700 mx-2" />
+
+          {/* Export Group */}
+          <div className="flex items-center gap-2">
+              <button 
+                onClick={handleExportPDF}
+                disabled={isExporting}
+                className="bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-zinc-700 flex items-center gap-2 disabled:opacity-50 transition-all border border-zinc-700"
+                title="Download as PDF"
+              >
+                <FileType className="w-4 h-4" />
+                <span>PDF</span>
+              </button>
+
+              <button 
+                onClick={handleExportPPTX}
+                disabled={isExporting}
+                className="bg-white text-black px-4 py-2 rounded-lg text-sm font-semibold hover:bg-zinc-200 flex items-center gap-2 disabled:opacity-50 transition-all shadow-[0_0_15px_-5px_rgba(255,255,255,0.3)]"
+                title="Download as PowerPoint"
+              >
+                <Presentation className="w-4 h-4" />
+                <span>PPTX</span>
+              </button>
+          </div>
         </div>
       </div>
 
@@ -186,7 +381,7 @@ export const DeckViewer: React.FC<DeckViewerProps> = ({ slides, system, onClose 
         <div 
           className="aspect-video w-full max-w-[1600px] shadow-2xl relative bg-white transition-all duration-300"
           style={{ 
-            boxShadow: `0 0 100px -20px ${system.colors.accent}40`
+            boxShadow: `0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 100px -20px ${system.colors.accent}15`
           }}
         >
           <SlideRenderer 

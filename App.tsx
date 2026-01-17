@@ -113,16 +113,17 @@ const App: React.FC = () => {
               isLoading={state === 'generating'}
             />
           )}
-
-          {state === 'presentation' && presentation && (
-            <DeckViewer 
-              slides={presentation.slides} 
-              system={designSystem}
-              onClose={() => setState('review')}
-            />
-          )}
         </div>
       </main>
+
+      {/* DeckViewer - Moved outside of main to ensure correct z-index stacking */}
+      {state === 'presentation' && presentation && (
+        <DeckViewer 
+          slides={presentation.slides} 
+          system={designSystem}
+          onClose={() => setState('review')}
+        />
+      )}
 
       {/* Background Ambience */}
       <div className="fixed inset-0 pointer-events-none z-0">
