@@ -1,0 +1,5 @@
+{
+  "name": "Presentation Intelligence Engine",
+  "description": "Reverse engineer presentation design systems from images and generate new on-brand decks using Gemini AI.",
+  "requestFramePermissions": []
+}
