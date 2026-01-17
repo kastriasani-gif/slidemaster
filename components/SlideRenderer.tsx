@@ -38,37 +38,28 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, system, ind
                     : useSectionMaster ? (masters.section || masters.title) // Fallback if section undefined in old data
                     : masters.default;
 
-  // Hard Layout Constants
-  const LEFT_START = '6.5%';
-  const MAX_WIDTH = '45%';
-  const FONT_ARIAL = 'Arial, sans-serif'; // Enforced font stack
-
-  // Base Slide Style
+  // CSS variables for the slide context
   const slideStyle: React.CSSProperties = {
     background: masterStyle.backgroundImage
       ? `url(${masterStyle.backgroundImage}) center/cover no-repeat`
       : masterStyle.background,
-    color: '#FFFFFF', // Enforced white text for contrast per rules
-    fontFamily: FONT_ARIAL,
+    color: masterStyle.textColor,
+    fontFamily: fonts.body,
   };
 
-  // Strict Content Container Style
-  const contentContainerStyle: React.CSSProperties = {
-    position: 'absolute',
-    left: LEFT_START,
-    width: MAX_WIDTH,
-    maxWidth: MAX_WIDTH,
-    zIndex: 10,
-    textAlign: 'left',
-    color: '#FFFFFF',
-    overflowWrap: 'break-word',
-    wordWrap: 'break-word',
-    display: 'flex',
-    flexDirection: 'column',
+  const headingStyle: React.CSSProperties = {
+    fontFamily: fonts.heading,
+    color: masterStyle.textColor, // Headings usually follow text color or primary
   };
 
   const accentStyle: React.CSSProperties = {
     color: masterStyle.accentColor,
+  };
+
+  const secondaryStyle: React.CSSProperties = {
+    color: useTitleMaster || useSectionMaster ? masterStyle.textColor : colors.secondary,
+    opacity: 0.8,
+    fontFamily: fonts.body,
   };
 
   // Helper to get image URL
@@ -85,55 +76,72 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, system, ind
 
   // Logo Component
   const Logo = () => {
+    // Note: Re-enabling logo on title slide based on layout requirement "balance ... top logo area"
     if (logo.placement === 'none') return null;
 
-    // Use specific images if available, otherwise fallback
-    const logoSrc = logo.images?.light || logo.images?.dark;
+    const positionClasses = {
+      'top-left': 'top-8 left-12',
+      'top-right': 'top-8 right-12',
+      'bottom-left': 'bottom-8 left-12',
+      'bottom-right': 'bottom-8 right-12',
+      'top-center': 'top-8 left-1/2 -translate-x-1/2',
+    };
 
-    // Fixed placement logic as per visual requirements (Top Left usually to balance content)
-    // Logo never moves, never overlaps text (text container is constrained to 45% width, top 52% or centered)
-    // Assuming standard logo placement is Top Left for this design system based on previous iterations
+    // Decide which logo to use based on text color of the master slide.
+    const isTextLight = isColorLight(masterStyle.textColor);
     
+    // Prefer the specific image if available
+    const logoSrc = isTextLight 
+      ? (logo.images?.light || logo.images?.dark) 
+      : (logo.images?.dark || logo.images?.light);
+
+    // Override placement for Title/End slides to align with content left margin (6.5%)
+    const style: React.CSSProperties = useTitleMaster ? {
+        top: '8%',
+        left: '6.5%',
+        right: 'auto',
+        bottom: 'auto',
+        transform: 'none'
+    } : {};
+    
+    const className = useTitleMaster 
+        ? 'absolute z-20 max-w-[250px] max-h-[100px] flex items-center' // No position classes, handled by style
+        : `absolute z-20 ${positionClasses[logo.placement]} max-w-[250px] max-h-[100px] flex items-center`;
+
+    // If we have an image, render it
     if (logoSrc) {
       return (
-        <div style={{
-            position: 'absolute',
-            top: '8%',
-            left: '6.5%', // Aligned with content container
-            zIndex: 20,
-            maxWidth: '250px',
-            maxHeight: '100px',
-            display: 'flex',
-            alignItems: 'center'
-        }}>
+        <div className={className} style={style}>
            <img 
             src={logoSrc} 
             alt="Brand Logo" 
             className="w-auto h-auto max-h-[80px] max-w-full object-contain select-none"
             style={{ 
-               // Ensure logo is visible on dark backgrounds (enforce white/light mode if needed)
-               filter: 'brightness(0) invert(1)' // Assuming dark background + white logo requirement
+               filter: (!logo.images?.light && isTextLight) ? 'brightness(0) invert(1)' : 
+                       (!logo.images?.dark && !isTextLight) ? 'brightness(0)' : 'none'
             }}
           />
         </div>
       );
     }
+
     return null;
   };
 
-  // Footer Component
+  // Footer Component (only for non-title slides usually)
   const Footer = () => {
+    // Hide footer on title, end, or section slides
     if (useTitleMaster || useSectionMaster) return null;
     return (
-      <div className="absolute bottom-8 right-12 flex justify-end items-end opacity-50 z-20 pointer-events-none">
-        <div className="text-xs font-mono text-white">
+      <div className="absolute bottom-8 left-12 right-12 flex justify-end items-end opacity-50 z-20 pointer-events-none">
+        <div className="text-xs font-mono" style={{ color: colors.secondary }}>
           {index + 1} / {total}
         </div>
       </div>
     );
   };
 
-  // Video Background
+  // Render MP4 Background if available
   const VideoBackground = ({ src }: { src: string }) => (
     <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
        <video 
@@ -144,7 +152,8 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, system, ind
          playsInline
          className="w-full h-full object-cover"
        />
-       <div className="absolute inset-0 bg-black/40" /> {/* Enforced contrast overlay */}
+       {/* Use a very subtle gradient at the bottom instead of full overlay to keep video clear */}
+       <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent" />
     </div>
   );
 
@@ -152,44 +161,44 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, system, ind
     switch (slide.type) {
       case 'title':
         return (
-          <div className="h-full w-full relative z-10">
-             <div style={{
-                 ...contentContainerStyle,
-                 top: '52%', // Vertically positioned slightly below canvas center
-             }}>
-                <h1 style={{
-                    fontFamily: FONT_ARIAL,
+          <div className="h-full w-full relative overflow-hidden z-10">
+             <div 
+               style={{
+                 position: 'absolute',
+                 left: '6.5%',
+                 top: '52%',
+                 width: '48%',
+                 textAlign: 'left',
+                 fontFamily: 'Arial, sans-serif',
+                 color: '#FFFFFF'
+               }}
+             >
+                <h1 
+                  style={{
                     fontWeight: 'bold',
                     fontSize: '52px',
                     lineHeight: '1.1',
+                    margin: 0,
                     marginBottom: '1rem',
-                    color: '#FFFFFF'
-                }}>
+                  }}
+                >
                   {slide.title}
                 </h1>
                 {slide.subtitle && (
-                  <p style={{
-                      fontFamily: FONT_ARIAL,
+                  <p 
+                    style={{
+                      fontFamily: 'Arial, sans-serif',
                       fontWeight: 'normal',
-                      fontSize: '24px', // Secondary text size
-                      lineHeight: '1.2',
-                      marginBottom: '1rem',
+                      fontSize: '24px',
                       opacity: 0.9,
-                      color: '#FFFFFF'
-                  }}>
+                      lineHeight: '1.2'
+                    }}
+                  >
                     {slide.subtitle}
                   </p>
                 )}
                 
-                <div style={{
-                    marginTop: '2rem',
-                    fontFamily: FONT_ARIAL,
-                    fontSize: '18px',
-                    color: '#FFFFFF',
-                    opacity: 0.8,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em'
-                }}>
+                <div className="mt-12 text-sm font-mono tracking-widest uppercase opacity-60" style={{ color: '#FFFFFF' }}>
                     {dateStr}
                 </div>
              </div>
@@ -197,188 +206,229 @@ export const SlideRenderer: React.FC<SlideRendererProps> = ({ slide, system, ind
         );
 
       case 'section':
+        // Topic slide - Full Screen Layout
+        // Background is handled by parent slideStyle (image) or logic below
+
         return (
-          <div className="h-full w-full relative z-10">
-             {/* Dark gradient overlay enforced for contrast */}
+          <div className="h-full w-full relative z-10 flex flex-col justify-center px-[6.5%]">
+             {/* Dark gradient overlay to ensure text pop on full background images */}
              {masterStyle.backgroundImage && (
-                <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent z-[-1]" />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-[-1]" />
              )}
 
-             <div style={{
-                 ...contentContainerStyle,
-                 top: '50%',
-                 transform: 'translateY(-50%)',
-             }}>
+             {/* Constraint width to 50% to safely avoid crossing the vertical line in the background graphic (previously 60%) */}
+             <div className="relative" style={{ maxWidth: '50%' }}>
                  <div className="w-16 h-2 mb-8" style={{ backgroundColor: masterStyle.accentColor }} />
                  
-                 {/* First Title */}
                  <h2 style={{
-                    fontFamily: FONT_ARIAL,
                     fontWeight: 'bold',
-                    fontSize: '40px',
-                    lineHeight: '1.2',
+                    fontSize: '48px',
+                    lineHeight: '1.1',
                     margin: 0,
-                    marginBottom: '16px',
+                    marginBottom: '12px',
                     color: '#FFFFFF' 
                  }}>
                    {slide.title}
                  </h2>
 
-                 {/* Second Title */}
                  {slide.subtitle && (
                    <div style={{
-                      fontFamily: FONT_ARIAL,
                       fontWeight: 'normal',
-                      fontSize: '40px',
+                      fontSize: '32px',
                       lineHeight: '1.2',
                       marginBottom: '16px',
+                      opacity: 0.9,
                       color: '#FFFFFF'
                    }}>
                      {slide.subtitle}
                    </div>
                  )}
 
-                 {/* Third Title (Content) */}
+                 {/* Extra content for section if available */}
                  {slide.content && slide.content.length > 0 && (
-                    <div style={{ 
-                        fontFamily: FONT_ARIAL,
-                        fontWeight: 'normal',
-                        fontSize: '40px',
-                        lineHeight: '1.2',
-                        marginBottom: '16px',
-                        color: '#FFFFFF'
-                    }}>
+                    <div style={{ fontSize: '24px', opacity: 0.8, marginTop: '24px', color: '#FFFFFF' }}>
                        {slide.content[0]}
                     </div>
                  )}
 
-                 {/* Date Line */}
-                 <div style={{
-                     marginTop: '48px', // Increased spacing
-                     fontFamily: FONT_ARIAL,
-                     fontWeight: 'normal',
-                     fontSize: '21px',
-                     color: '#FFFFFF'
-                 }}>
+                 <div className="mt-12 text-sm font-mono tracking-widest uppercase opacity-60" style={{ color: '#FFFFFF' }}>
                     {dateStr}
                  </div>
              </div>
           </div>
         );
 
-      // Handle all other types by forcing them into the left container rules
-      // to avoid silent layout degradation and enforce consistency.
-      case 'content':
       case 'splitLeft':
+        return (
+          <div className="h-full flex z-10 relative">
+            <div className="w-1/2 h-full relative overflow-hidden">
+               <img 
+                 src={getImageUrl(slide.imageKeyword)} 
+                 alt="Slide visual" 
+                 className="absolute inset-0 w-full h-full object-cover"
+               />
+               <div className="absolute inset-0 bg-black/10" /> 
+            </div>
+            <div className="w-1/2 h-full flex flex-col justify-center px-16 py-12">
+               <h2 className="text-4xl font-bold mb-8" style={headingStyle}>
+                 {slide.title}
+               </h2>
+               <div className="space-y-4">
+                 {slide.content?.map((point, i) => (
+                   <div key={i} className="flex gap-4">
+                      <span className="text-xl font-bold mt-1" style={accentStyle}>•</span>
+                      <p className="text-lg leading-relaxed opacity-90">{point}</p>
+                   </div>
+                 ))}
+               </div>
+            </div>
+          </div>
+        );
+        
       case 'splitRight':
+        return (
+          <div className="h-full flex flex-row-reverse z-10 relative">
+            <div className="w-1/2 h-full relative overflow-hidden">
+               <img 
+                 src={getImageUrl(slide.imageKeyword)} 
+                 alt="Slide visual" 
+                 className="absolute inset-0 w-full h-full object-cover"
+               />
+            </div>
+            <div className="w-1/2 h-full flex flex-col justify-center px-16 py-12">
+               <div className="w-16 h-1 mb-8" style={{ backgroundColor: masterStyle.accentColor }} />
+               <h2 className="text-4xl font-bold mb-8" style={headingStyle}>
+                 {slide.title}
+               </h2>
+               <div className="space-y-6">
+                 {slide.content?.map((point, i) => (
+                   <p key={i} className="text-lg leading-relaxed opacity-90 border-l-2 pl-6" style={{ borderColor: `${colors.secondary}40` }}>
+                     {point}
+                   </p>
+                 ))}
+               </div>
+            </div>
+          </div>
+        );
+
       case 'quote':
+        return (
+          <div className="h-full flex flex-col justify-center items-center px-32 text-center relative z-10">
+            <div className="absolute inset-0 opacity-5 pointer-events-none" 
+                 style={{ backgroundImage: `radial-gradient(circle at center, ${colors.primary} 1px, transparent 1px)`, backgroundSize: '24px 24px' }} 
+            />
+            <div className="text-9xl opacity-20 font-serif absolute top-24 left-24" style={accentStyle}>“</div>
+            
+            <blockquote className="relative z-10">
+              <p className="text-5xl font-bold leading-tight mb-12" style={headingStyle}>
+                {slide.highlight || slide.title}
+              </p>
+              {slide.subtitle && (
+                <cite className="text-xl not-italic font-medium tracking-wide uppercase" style={secondaryStyle}>
+                  — {slide.subtitle}
+                </cite>
+              )}
+            </blockquote>
+          </div>
+        );
+
       case 'bigNumber':
+        return (
+          <div className="h-full flex items-center justify-between px-24 z-10 relative">
+            <div className="max-w-xl">
+               <h2 className="text-4xl font-bold mb-6" style={headingStyle}>
+                 {slide.title}
+               </h2>
+               <div className="space-y-4 text-lg opacity-80">
+                 {slide.content?.map((c, i) => <p key={i}>{c}</p>)}
+               </div>
+            </div>
+            <div className="flex-1 flex justify-center items-center">
+               <div className="relative">
+                  <div className="text-[12rem] font-bold leading-none tracking-tighter" style={accentStyle}>
+                    {slide.highlight || "100%"}
+                  </div>
+                  {slide.subtitle && (
+                    <div className="text-xl font-bold text-center mt-2 uppercase tracking-widest" style={secondaryStyle}>
+                       {slide.subtitle}
+                    </div>
+                  )}
+               </div>
+            </div>
+          </div>
+        );
+
+      case 'content':
       default:
-        // Treat End slide like Title slide
+        // Use generic layout for content, but if it's the end slide, match Title slide alignment exactly
         if (isEndSlide) {
             return (
-                <div className="h-full w-full relative z-10">
-                   <div style={{
-                       ...contentContainerStyle,
+                <div className="h-full w-full relative overflow-hidden z-10">
+                   <div 
+                     style={{
+                       position: 'absolute',
+                       left: '6.5%',
                        top: '52%',
-                   }}>
-                     <h2 style={{
-                          fontFamily: FONT_ARIAL,
+                       // No transform translateY to match title slide text start position
+                       width: '50%',
+                       textAlign: 'left',
+                       color: '#FFFFFF'
+                     }}
+                   >
+                     <h2 
+                        style={{
+                          fontFamily: 'Arial, sans-serif',
                           fontWeight: 'bold',
                           fontSize: '52px',
                           lineHeight: '1.1',
+                          margin: 0,
                           marginBottom: '1rem',
                           color: '#FFFFFF'
                         }}
                      >
                        {slide.title}
                      </h2>
-                     {slide.content && slide.content.map((point, i) => (
-                        <p key={i} style={{
-                            fontFamily: FONT_ARIAL,
-                            fontSize: '24px',
-                            lineHeight: '1.2',
-                            marginBottom: '0.5rem',
-                            color: '#FFFFFF',
-                            opacity: 0.9
-                        }}>{point}</p>
-                     ))}
+                     <div className="text-xl opacity-90 leading-relaxed" style={{ color: masterStyle.textColor }}>
+                        {slide.content?.map((point, i) => <p key={i} className="mb-2">{point}</p>)}
+                     </div>
                    </div>
                 </div>
             );
         }
 
-        // Standard Layout enforcing Left Container
         return (
-          <div className="h-full w-full relative z-10">
-             {/* Always ensure contrast */}
-             <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-[-1]" />
-
-             <div style={{
-                 ...contentContainerStyle,
-                 top: '15%',
-                 height: '80%',
-                 justifyContent: 'flex-start'
-             }}>
-                <header style={{ marginBottom: '48px', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '24px' }}>
-                  <h2 style={{
-                      fontFamily: FONT_ARIAL,
-                      fontWeight: 'bold',
-                      fontSize: '40px',
-                      lineHeight: '1.1',
-                      color: '#FFFFFF'
-                  }}>
-                    {slide.title}
-                  </h2>
-                </header>
-                
-                <div className="space-y-6">
-                   {slide.content?.map((point, i) => (
-                     <div key={i} className="flex items-start gap-4">
-                        <div className="w-2 h-2 rounded-full mt-2.5 flex-shrink-0" style={{ backgroundColor: masterStyle.accentColor }} />
-                        <p style={{
-                            fontFamily: FONT_ARIAL,
-                            fontSize: '24px',
-                            lineHeight: '1.4',
-                            opacity: 0.9,
-                            color: '#FFFFFF'
-                        }}>{point}</p>
-                     </div>
-                   ))}
-                   
-                   {/* Handle Big Number / Quote content if mapped here */}
-                   {slide.highlight && (
-                       <div style={{ fontSize: '96px', fontWeight: 'bold', color: masterStyle.accentColor, lineHeight: 1 }}>
-                           {slide.highlight}
-                       </div>
-                   )}
-                </div>
-             </div>
-
-             {/* Images are decorative and go to the right, never overlapping left container */}
-             {slide.imageKeyword && (
-                  <div style={{
-                      position: 'absolute',
-                      right: '0',
-                      top: '0',
-                      bottom: '0',
-                      width: '45%', // Keep clear of the 49% boundary
-                      overflow: 'hidden',
-                      zIndex: 0
-                  }}>
+          <div className="h-full flex flex-col px-16 py-12 z-10 relative">
+            <header className="mb-12 border-b pb-6" style={{ borderColor: `${colors.secondary}40` }}>
+              <h2 className="text-4xl font-bold" style={headingStyle}>
+                {slide.title}
+              </h2>
+            </header>
+            <div className="flex-1 grid grid-cols-12 gap-12">
+               <div className="col-span-7 space-y-6">
+                 {slide.content?.map((point, i) => (
+                   <div key={i} className="flex items-start gap-4">
+                      <div className="w-2 h-2 rounded-full mt-2.5 flex-shrink-0" style={{ backgroundColor: masterStyle.accentColor }} />
+                      <p className="text-xl leading-relaxed opacity-90">{point}</p>
+                   </div>
+                 ))}
+               </div>
+               {slide.imageKeyword && (
+                  <div className="col-span-5 h-full relative rounded-2xl overflow-hidden shadow-2xl">
                      <img 
                        src={getImageUrl(slide.imageKeyword)} 
-                       className="w-full h-full object-cover opacity-60 grayscale hover:grayscale-0 transition-all duration-700" 
+                       className="absolute inset-0 w-full h-full object-cover grayscale opacity-80 hover:grayscale-0 hover:opacity-100 transition-all duration-700" 
                        alt="decorative"
                      />
-                     <div className="absolute inset-0 bg-gradient-to-l from-transparent to-black" />
                   </div>
-             )}
+               )}
+            </div>
           </div>
         );
     }
   };
 
+  // Only render background animation if using title master (Title/End slides)
+  // Ensure we render the video background if it exists in the master style
   const showVideoBackground = useTitleMaster && masterStyle.backgroundVideo;
 
   return (
